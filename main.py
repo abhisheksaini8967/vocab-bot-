@@ -5,7 +5,7 @@ import logging
 from html import escape
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -13,9 +13,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Railway Variables se token dynamically load hoga
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 1786928328
 
+# Global In-Memory List (Superfast aur Railway deployment chalu rehte tak safe)
 WORDS_DATA = []
 WORDS_BY_ID = {}
 
@@ -31,30 +33,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     welcome_text = "👋 <b>Swagat hai!</b>\n\nVocabulary quiz shuru karne ke liye <b>/quiz</b> type karein."
     if update.effective_user.id == ADMIN_ID:
-        welcome_text += "\n\n👑 <b>Admin Control Active:</b>\nEk sath bohot saare words jodne ke liye <b>/bulkadd</b> command ka use karein."
+        welcome_text += "\n\n👑 <b>Admin Control Active:</b>\nSaare words ek sath copy karke direct chat me send kar dein, bot apne aap bulk add kar lega!"
         
     await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
 
-# 👑 [NEW BULK ADD FEATURE] Ek sath saare words jodne ke liye
-async def bulk_add_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# 👑 Automatic Bulk Detector (Bina kisi command jhanjhat ke, list milte hi khud save karega)
+async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Aapke paas permission nahi hai.")
         return
 
-    # Command ke baad ka poora text lena (jo multi-line hoga)
-    text = update.message.text.replace('/bulkadd', '').strip()
+    text = update.message.text.strip()
     
-    if not text:
-        await update.message.reply_text(
-            "⚠️ <b>Format Khali Hai!</b>\n\nKripya is tarah se ek sath saare words bhejein:\n"
-            "<code>/bulkadd\n"
-            "Word1 | Meaning1 | Explanation1\n"
-            "Word2 | Meaning2 | Explanation2</code>",
-            parse_mode=ParseMode.HTML
-        )
+    # Ignore regular commands like /start or /quiz
+    if text.startswith('/'):
         return
 
-    # Har ek line ko alag-alag process karna
     lines = text.split('\n')
     added_count = 0
     
@@ -84,18 +77,18 @@ async def bulk_add_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if added_count > 0:
         refresh_words_map()
         await update.message.reply_text(
-            f"🚀 <b>Kamal Ho Gaya!</b>\n\nEk sath <b>{added_count}</b> naye words successfully jod diye gaye hain!\n"
-            f"📚 Ab aapke bot me total <b>{len(WORDS_DATA)}</b> words hain.\n\n"
-            f"Ab aap aaram se <b>/quiz</b> khel sakte hain!",
+            f"🚀 <b>Kamal Ho Gaya Bhai!</b>\n\nEk sath <b>{added_count}</b> naye words successfully database me jod diye gaye hain!\n"
+            f"📚 Ab aapke bot me total <b>{len(WORDS_DATA)}</b> words ho chuke hain.\n\n"
+            f"Ab aap shanti se <b>/quiz</b> chala kar khel sakte hain!",
             parse_mode=ParseMode.HTML
         )
     else:
-        await update.message.reply_text("❌ Khel gadhbadh hua, koi bhi line sahi format me nahi mili.")
+        await update.message.reply_text("⚠️ Mujhe is message me koi bhi valid list format (`Word | Meaning`) nahi mila.")
 
 async def send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = update.message or update.callback_query.message
     if not WORDS_DATA:
-        await target.reply_text("⚠️ Abhi bot me koi words nahi hain. Kripya pehle <code>/bulkadd</code> command se words jodein.", parse_mode=ParseMode.HTML)
+        await target.reply_text("⚠️ Abhi bot me koi words nahi hain. Kripya pehle apni poori list direct chat me send karke jodein.")
         return
     
     remaining = context.user_data.get("remaining", [])
@@ -168,4 +161,36 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     score = context.user_data["score"]
     total = context.user_data["total_attempted"]
     result_text = f"❓ <b>Word:</b> <code>{correct_word}</code>\n\n{status_text}\n💡 <b>Explanation:</b> {explanation}\n\n🏆 <b>Score:</b> <code>{score}/{total}</code>"
+    
+    next_keyboard = [[InlineKeyboardButton("➡️ Next Word", callback_data="next_question")]]
+    next_markup = InlineKeyboardMarkup(next_keyboard)
+    await query.edit_message_text(text=result_text, reply_markup=next_markup, parse_mode=ParseMode.HTML)
+
+async def next_word_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    try:
+        await query.message.delete()
+    except Exception as e:
+        logger.error(f"Error deleting old quiz message: {e}")
+    await send_quiz_question(update, context)
+
+def main():
+    if not TOKEN:
+        raise ValueError("BOT_TOKEN missing!")
+        
+    application = Application.builder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("quiz", quiz))
+    application.add_handler(CallbackQueryHandler(next_word_handler, pattern="^next_question$"))
+    application.add_handler(CallbackQueryHandler(button_click, pattern=r"^ans|"))
+    
+    # Text message handler to catch full copied lists automatically
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    
+    logger.info("Bot service running safely...")
+    application.run_polling(drop_pending_updates=True)
+
+if __name__ == "__main__":
+    main()
     
