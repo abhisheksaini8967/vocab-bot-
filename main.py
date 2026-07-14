@@ -1,11 +1,10 @@
 import os
-import json
 import random
 import logging
 from html import escape
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -13,17 +12,60 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Railway Variables se token dynamically load hoga
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 1786928328
 
-# Global In-Memory List (Superfast aur Railway deployment chalu rehte tak safe)
-WORDS_DATA = []
-WORDS_BY_ID = {}
+# 📚 Saare 46 words bot ke andar permanent fix kar diye hain!
+WORDS_DATA = [
+  {"id": 0, "word": "Philanthropist", "meaning": "परोपकारी", "explanation": "दूसरों की मदद करने वाला"},
+  {"id": 1, "word": "Epitaph", "meaning": "समाधि-लेख", "explanation": "कब्र पर लिखा जाने वाला संदेश"},
+  {"id": 2, "word": "Obsolete", "meaning": "अप्रचलित", "explanation": "जो अब उपयोग में न हो या पुराना हो चुका हो"},
+  {"id": 3, "word": "Illegible", "meaning": "अपठनीय", "explanation": "जिसे पढ़ना मुश्किल या असंभव हो, जैसे डॉक्टर की लिखावट"},
+  {"id": 4, "word": "Inevitable", "meaning": "अनिवार्य / जो होना तय हो", "explanation": "जिसे टाला न जा सके"},
+  {"id": 5, "word": "Aviary", "meaning": "पक्षी-घर", "explanation": "वह जगह जहाँ पक्षियों को रखा जाता है"},
+  {"id": 6, "word": "Contemporary", "meaning": "समकालीन", "explanation": "एक ही समय के लोग या चीजें"},
+  {"id": 7, "word": "Stoic", "meaning": " उदासीन / वैरागी", "explanation": "जो सुख-दुख में एक जैसा रहे और भावनाओं पर नियंत्रण रखे"},
+  {"id": 8, "word": "Atheist", "meaning": "नास्तिक", "explanation": "जो भगवान पर विश्वास नहीं करता"},
+  {"id": 9, "word": "Cartographer", "meaning": "मानचित्रकार", "explanation": "जो नक्शे यानी मैप्स बनाता है"},
+  {"id": 10, "word": "Claustrophobia", "meaning": "बंद या छोटी जगहों से लगने वाला डर", "explanation": "सीमित या बंद स्थानों का अत्यधिक भय"},
+  {"id": 11, "word": "Omniscient", "meaning": "सर्वज्ञानी", "explanation": "जिसे सब कुछ पता हो"},
+  {"id": 12, "word": "Panacea", "meaning": "रामबाण इलाज", "explanation": "हर समस्या या बीमारी का एक ही इलाज"},
+  {"id": 13, "word": "Polyglot", "meaning": "बहुभाषी", "explanation": "जो कई भाषाएं बोल सकता हो"},
+  {"id": 14, "word": "Chronology", "meaning": "कालक्रम", "explanation": "घटनाओं को समय के सही क्रम में व्यवस्थित करना"},
+  {"id": 15, "word": "Extempore", "meaning": "बिना तैयारी का भाषण", "explanation": "बिना किसी पूर्व तैयारी के तुरंत बोलना"},
+  {"id": 16, "word": "Fastidious", "meaning": "तुनकमिज़ाज / जिसे खुश करना मुश्किल हो", "explanation": "जो छोटी-छोटी डिटेल्स पर ध्यान देता है"},
+  {"id": 17, "word": "Utopia", "meaning": "आदर्श लोक", "explanation": "सपनों की एक आदर्श और परफेक्ट दुनिया"},
+  {"id": 18, "word": "Amateur", "meaning": "शौकिया / नौसिखिया", "explanation": "जो किसी काम को प्रोफेशन के लिए नहीं बल्कि शौक के लिए करता है या एक्सपर्ट नहीं है"},
+  {"id": 19, "word": "Ambidextrous", "meaning": "दोनों हाथों से काम करने में कुशल", "explanation": "जो दोनों हाथों का बराबर इस्तेमाल कर सके"},
+  {"id": 20, "word": "Iconoclast", "meaning": "मूर्तिभंजक / स्थापित परंपराओं को तोड़ने वाला", "explanation": "जो पुरानी सोच या ट्रेडिशंस को चुनौती दे"},
+  {"id": 21, "word": "Infallible", "meaning": "अचूक", "explanation": "जिससे कभी कोई गलती न हो"},
+  {"id": 22, "word": "Altruist", "meaning": "परोपकारी / निस्वार्थ", "explanation": "जो अपने से ज्यादा दूसरों की भलाई के बारे में सोचे"},
+  {"id": 23, "word": "Inaudible", "meaning": "जो सुनाई न दे", "explanation": "अश्रव्य"},
+  {"id": 24, "word": "Lexicographer", "meaning": "शब्दकोश बनाने वाला", "explanation": "जो डिक्शनरी लिखता या कंपाइल करता है"},
+  {"id": 25, "word": "Mercenary", "meaning": "किराये का सैनिक / स्वार्थी", "explanation": "जो सिर्फ पैसे के लिए काम करता हो"},
+  {"id": 26, "word": "Misanthrope", "meaning": "मानव-द्वेषी", "explanation": "जो इंसानों या मानव जाति से नफ़रत करता हो"},
+  {"id": 27, "word": "Nostalgia", "meaning": "अतीत की यादें / पुरानी यादों के लिए तड़प", "explanation": "पुरानी सुखद यादों को याद करने की मानसिक स्थिति"},
+  {"id": 28, "word": "Amphibian", "meaning": "उभयचर", "explanation": "जो पानी और जमीन दोनों पर रह सकते हैं, जैसे मेंढक"},
+  {"id": 29, "word": "Autobiography", "meaning": "आत्मकथा", "explanation": "खुद के द्वारा लिखी गई अपने जीवन की कहानी"},
+  {"id": 30, "word": "Cannibal", "meaning": "नरभक्षी", "explanation": "जो इंसान का मांस खाता हो या अपनी ही प्रजाति को खाता हो"},
+  {"id": 31, "word": "Chauffeur", "meaning": "निजी कार चालक", "explanation": "किसी अमीर व्यक्ति या लग्जरी कार का परमानेंट ड्राइवर"},
+  {"id": 32, "word": "Entomology", "meaning": "कीटविज्ञान", "explanation": "कीड़े-मकौड़ों का अध्ययन"},
+  {"id": 33, "word": "Insolvent", "meaning": "दिवालिया", "explanation": "जो अपना कर्ज चुकाने में असमर्थ हो"},
+  {"id": 34, "word": "Kleptomania", "meaning": "चोरी करने की बीमारी / आदत", "explanation": "बिना जरूरत के भी चीजें चुराने की तीव्र इच्छा"},
+  {"id": 35, "word": "Oligarchy", "meaning": "कुलीनतंत्र", "explanation": "कुछ शक्तिशाली या खास लोगों का शासन"},
+  {"id": 36, "word": "Omnipotent", "meaning": "सर्वशक्तिमान", "explanation": "जिसके पास सारी शक्तियां हों"},
+  {"id": 37, "word": "Philatelist", "meaning": "डाक टिकट बटोरने वाला", "explanation": "जिसे स्टैम्प्स कलेक्ट करने का शौक हो"},
+  {"id": 38, "word": "Teetotaler", "meaning": "मद्यत्यागी", "explanation": "जो कभी भी अल्कोहल या शराब नहीं पीता"},
+  {"id": 39, "word": "Versatile", "meaning": "बहुमुखी प्रतिभा का धनी", "explanation": "मल्टीटैलेंटेड इंसान जिसके पास कई तरह के हुनर हों"},
+  {"id": 40, "word": "Anarchist", "meaning": "अराजकतावादी", "explanation": "जो किसी भी सरकार या नियम-कानून को नहीं मानता"},
+  {"id": 41, "word": "Calligraphy", "meaning": "सुलेखन", "explanation": "सुंदर लिखावट या ब्यूटीफुल हैंडराइटिंग की कला"},
+  {"id": 42, "word": "Constellation", "meaning": "नक्षत्र / तारागण", "explanation": "तारों का समूह जो एक निश्चित आकृति बनाता है"},
+  {"id": 43, "word": "Gregarious", "meaning": "झुंड में रहने वाला / सामाजिक", "explanation": "जो समूह या गैंग में रहना पसंद करते हैं"},
+  {"id": 44, "word": "Introvert", "meaning": "अंतर्मुखी", "explanation": "जो अकेले रहना पसंद करता है और ज्यादा सामाजिक नहीं होता"},
+  {"id": 45, "word": "Orchard", "meaning": "फलों का बाग", "explanation": "जहाँ फलों के पेड़ उगाए जाते हैं"}
+]
 
-def refresh_words_map():
-    global WORDS_BY_ID
-    WORDS_BY_ID = {item["id"]: item for item in WORDS_DATA}
+WORDS_BY_ID = {item["id"]: item for item in WORDS_DATA}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["score"] = 0
@@ -32,64 +74,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_question_answered"] = False
     
     welcome_text = "👋 <b>Swagat hai!</b>\n\nVocabulary quiz shuru karne ke liye <b>/quiz</b> type karein."
-    if update.effective_user.id == ADMIN_ID:
-        welcome_text += "\n\n👑 <b>Admin Control Active:</b>\nSaare words ek sath copy karke direct chat me send kar dein, bot apne aap bulk add kar lega!"
-        
     await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
-
-# 👑 Automatic Bulk Detector (Bina kisi command jhanjhat ke, list milte hi khud save karega)
-async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    text = update.message.text.strip()
-    
-    # Ignore regular commands like /start or /quiz
-    if text.startswith('/'):
-        return
-
-    lines = text.split('\n')
-    added_count = 0
-    
-    for line in lines:
-        line = line.strip()
-        if not line or "|" not in line:
-            continue
-            
-        try:
-            parts = line.split("|")
-            word = parts[0].strip()
-            meaning = parts[1].strip()
-            explanation = parts[2].strip() if len(parts) > 2 else "Koi detail uplabdh nahi hai."
-
-            if word and meaning:
-                next_id = len(WORDS_DATA)
-                WORDS_DATA.append({
-                    "id": next_id,
-                    "word": word,
-                    "meaning": meaning,
-                    "explanation": explanation
-                })
-                added_count += 1
-        except Exception:
-            continue
-
-    if added_count > 0:
-        refresh_words_map()
-        await update.message.reply_text(
-            f"🚀 <b>Kamal Ho Gaya Bhai!</b>\n\nEk sath <b>{added_count}</b> naye words successfully database me jod diye gaye hain!\n"
-            f"📚 Ab aapke bot me total <b>{len(WORDS_DATA)}</b> words ho chuke hain.\n\n"
-            f"Ab aap shanti se <b>/quiz</b> chala kar khel sakte hain!",
-            parse_mode=ParseMode.HTML
-        )
-    else:
-        await update.message.reply_text("⚠️ Mujhe is message me koi bhi valid list format (`Word | Meaning`) nahi mila.")
 
 async def send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = update.message or update.callback_query.message
-    if not WORDS_DATA:
-        await target.reply_text("⚠️ Abhi bot me koi words nahi hain. Kripya pehle apni poori list direct chat me send karke jodein.")
-        return
     
     remaining = context.user_data.get("remaining", [])
     if not remaining:
@@ -108,9 +96,6 @@ async def send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE)
         item["meaning"] for item in WORDS_DATA if item["meaning"] != correct_meaning
     ))
     
-    while len(other_meanings) < 3:
-        other_meanings.append(f"Galat Option {len(other_meanings) + 1}")
-        
     wrong_options = random.sample(other_meanings, 3)
     options = wrong_options + [correct_meaning]
     random.shuffle(options)
@@ -185,10 +170,7 @@ def main():
     application.add_handler(CallbackQueryHandler(next_word_handler, pattern="^next_question$"))
     application.add_handler(CallbackQueryHandler(button_click, pattern=r"^ans|"))
     
-    # Text message handler to catch full copied lists automatically
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
-    
-    logger.info("Bot service running safely...")
+    logger.info("Bot service running perfectly with 46 built-in words...")
     application.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
