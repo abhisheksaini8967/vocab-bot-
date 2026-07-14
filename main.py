@@ -13,11 +13,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Railway Variables se dynamic load hoga
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 1786928328
 
-# Local Array Storage (Server reset hone tak data temporary rakhega, pure safety ke sath)
 WORDS_DATA = []
 WORDS_BY_ID = {}
 
@@ -33,58 +31,71 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     welcome_text = "👋 <b>Swagat hai!</b>\n\nVocabulary quiz shuru karne ke liye <b>/quiz</b> type karein."
     if update.effective_user.id == ADMIN_ID:
-        welcome_text += "\n\n👑 <b>Admin Control Active:</b>\nNaya word jodne ke liye aise type karein:\n<code>/add Word | Meaning | Explanation</code>"
+        welcome_text += "\n\n👑 <b>Admin Control Active:</b>\nEk sath bohot saare words jodne ke liye <b>/bulkadd</b> command ka use karein."
         
     await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
 
-async def add_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# 👑 [NEW BULK ADD FEATURE] Ek sath saare words jodne ke liye
+async def bulk_add_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Aapke paas words add karne ki permission nahi hai.")
+        await update.message.reply_text("❌ Aapke paas permission nahi hai.")
         return
 
-    text = " ".join(context.args)
-    if not text or "|" not in text:
+    # Command ke baad ka poora text lena (jo multi-line hoga)
+    text = update.message.text.replace('/bulkadd', '').strip()
+    
+    if not text:
         await update.message.reply_text(
-            "⚠️ <b>Galat Format!</b>\n\nKripya is tarah se likhein:\n<code>/add Word | Meaning | Explanation</code>",
+            "⚠️ <b>Format Khali Hai!</b>\n\nKripya is tarah se ek sath saare words bhejein:\n"
+            "<code>/bulkadd\n"
+            "Word1 | Meaning1 | Explanation1\n"
+            "Word2 | Meaning2 | Explanation2</code>",
             parse_mode=ParseMode.HTML
         )
         return
 
-    try:
-        parts = text.split("|")
-        word = parts[0].strip()
-        meaning = parts[1].strip()
-        explanation = parts[2].strip() if len(parts) > 2 else "Koi detail uplabdh nahi hai."
+    # Har ek line ko alag-alag process karna
+    lines = text.split('\n')
+    added_count = 0
+    
+    for line in lines:
+        line = line.strip()
+        if not line or "|" not in line:
+            continue
+            
+        try:
+            parts = line.split("|")
+            word = parts[0].strip()
+            meaning = parts[1].strip()
+            explanation = parts[2].strip() if len(parts) > 2 else "Koi detail uplabdh nahi hai."
 
-        if not word or not meaning:
-            await update.message.reply_text("⚠️ Word aur Meaning dono likhna zaroori hai.")
-            return
+            if word and meaning:
+                next_id = len(WORDS_DATA)
+                WORDS_DATA.append({
+                    "id": next_id,
+                    "word": word,
+                    "meaning": meaning,
+                    "explanation": explanation
+                })
+                added_count += 1
+        except Exception:
+            continue
 
-        # Simple In-Memory Addition (Superfast & No File Crash)
-        next_id = len(WORDS_DATA)
-        WORDS_DATA.append({
-            "id": next_id,
-            "word": word,
-            "meaning": meaning,
-            "explanation": explanation
-        })
+    if added_count > 0:
         refresh_words_map()
-
         await update.message.reply_text(
-            f"✅ <b>Word Successfully Added!</b>\n\n"
-            f"📝 <b>Word:</b> <code>{escape(word)}</code>\n"
-            f"🎯 <b>Meaning:</b> {escape(meaning)}\n"
-            f"💡 <b>Explanation:</b> {escape(explanation)}\n\n"
-            f"📚 Ab total <b>{len(WORDS_DATA)}</b> words ho chuke hain.",
+            f"🚀 <b>Kamal Ho Gaya!</b>\n\nEk sath <b>{added_count}</b> naye words successfully jod diye gaye hain!\n"
+            f"📚 Ab aapke bot me total <b>{len(WORDS_DATA)}</b> words hain.\n\n"
+            f"Ab aap aaram se <b>/quiz</b> khel sakte hain!",
             parse_mode=ParseMode.HTML
         )
-    except Exception as e:
-        await update.message.reply_text("⚠️ Kuch gadhbadh hui. Kripya check karke dobara try karein.")
+    else:
+        await update.message.reply_text("❌ Khel gadhbadh hua, koi bhi line sahi format me nahi mili.")
 
 async def send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = update.message or update.callback_query.message
     if not WORDS_DATA:
-        await target.reply_text("⚠️ Abhi bot me koi words nahi hain. Kripya pehle Admin <code>/add</code> command se words jodein.", parse_mode=ParseMode.HTML)
+        await target.reply_text("⚠️ Abhi bot me koi words nahi hain. Kripya pehle <code>/bulkadd</code> command se words jodein.", parse_mode=ParseMode.HTML)
         return
     
     remaining = context.user_data.get("remaining", [])
@@ -157,34 +168,4 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     score = context.user_data["score"]
     total = context.user_data["total_attempted"]
     result_text = f"❓ <b>Word:</b> <code>{correct_word}</code>\n\n{status_text}\n💡 <b>Explanation:</b> {explanation}\n\n🏆 <b>Score:</b> <code>{score}/{total}</code>"
-    
-    next_keyboard = [[InlineKeyboardButton("➡️ Next Word", callback_data="next_question")]]
-    next_markup = InlineKeyboardMarkup(next_keyboard)
-    await query.edit_message_text(text=result_text, reply_markup=next_markup, parse_mode=ParseMode.HTML)
-
-async def next_word_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    try:
-        await query.message.delete()
-    except Exception as e:
-        logger.error(f"Error deleting old quiz message: {e}")
-    await send_quiz_question(update, context)
-
-def main():
-    if not TOKEN:
-        raise ValueError("BOT_TOKEN variable missing!")
-        
-    application = Application.builder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("quiz", quiz))
-    application.add_handler(CommandHandler("add", add_word))
-    application.add_handler(CallbackQueryHandler(next_word_handler, pattern="^next_question$"))
-    application.add_handler(CallbackQueryHandler(button_click, pattern=r"^ans|"))
-    
-    logger.info("Bot service running perfectly on cloud infrastructure...")
-    application.run_polling(drop_pending_updates=True)
-
-if __name__ == "__main__":
-    main()
     
