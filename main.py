@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 1786928328
 
-# 📚 Saare 46 words bot ke andar permanent fix kar diye hain!
+# 📚 Initial Words List (Pehle se loaded hain)
 WORDS_DATA = [
   {"id": 0, "word": "Philanthropist", "meaning": "परोपकारी", "explanation": "दूसरों की मदद करने वाला"},
   {"id": 1, "word": "Epitaph", "meaning": "समाधि-लेख", "explanation": "कब्र पर लिखा जाने वाला संदेश"},
@@ -24,7 +24,7 @@ WORDS_DATA = [
   {"id": 4, "word": "Inevitable", "meaning": "अनिवार्य / जो होना तय हो", "explanation": "जिसे टाला न जा सके"},
   {"id": 5, "word": "Aviary", "meaning": "पक्षी-घर", "explanation": "वह जगह जहाँ पक्षियों को रखा जाता है"},
   {"id": 6, "word": "Contemporary", "meaning": "समकालीन", "explanation": "एक ही समय के लोग या चीजें"},
-  {"id": 7, "word": "Stoic", "meaning": " उदासीन / वैरागी", "explanation": "जो सुख-दुख में एक जैसा रहे और भावनाओं पर नियंत्रण रखे"},
+  {"id": 7, "word": "Stoic", "meaning": "उदासीन / वैरागी", "explanation": "जो सुख-दुख में एक जैसा रहे और भावनाओं पर नियंत्रण रखे"},
   {"id": 8, "word": "Atheist", "meaning": "नास्तिक", "explanation": "जो भगवान पर विश्वास नहीं करता"},
   {"id": 9, "word": "Cartographer", "meaning": "मानचित्रकार", "explanation": "जो नक्शे यानी मैप्स बनाता है"},
   {"id": 10, "word": "Claustrophobia", "meaning": "बंद या छोटी जगहों से लगने वाला डर", "explanation": "सीमित या बंद स्थानों का अत्यधिक भय"},
@@ -67,6 +67,10 @@ WORDS_DATA = [
 
 WORDS_BY_ID = {item["id"]: item for item in WORDS_DATA}
 
+def refresh_words_map():
+    global WORDS_BY_ID
+    WORDS_BY_ID = {item["id"]: item for item in WORDS_DATA}
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["score"] = 0
     context.user_data["total_attempted"] = 0
@@ -74,10 +78,75 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_question_answered"] = False
     
     welcome_text = "👋 <b>Swagat hai!</b>\n\nVocabulary quiz shuru karne ke liye <b>/quiz</b> type karein."
+    if update.effective_user.id == ADMIN_ID:
+        welcome_text += "\n\n👑 <b>Admin Control Active:</b>\n- Ek word jodne ke liye: <code>/add Word | Meaning</code>\n- Ek sath bohot saare words jodne ke liye <code>/bulkadd</code> likhein fir agli line se list paste karein."
+        
     await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
+
+# 👑 1. Single word add karne ki command
+async def add_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    text = " ".join(context.args)
+    if not text or "|" not in text:
+        await update.message.reply_text("⚠️ Format: <code>/add Word | Meaning | Explanation</code>", parse_mode=ParseMode.HTML)
+        return
+    try:
+        parts = text.split("|")
+        word = parts[0].strip()
+        meaning = parts[1].strip()
+        explanation = parts[2].strip() if len(parts) > 2 else "Koi detail nahi hai."
+        
+        if word and meaning:
+            next_id = len(WORDS_DATA)
+            WORDS_DATA.append({"id": next_id, "word": word, "meaning": meaning, "explanation": explanation})
+            refresh_words_map()
+            await update.message.reply_text(f"✅ Added: <b>{escape(word)}</b> (Total: {len(WORDS_DATA)})", parse_mode=ParseMode.HTML)
+    except Exception:
+        await update.message.reply_text("❌ Error adding word.")
+
+# 👑 2. Ek sath unlimited words jodne ki command (Bulk Add)
+async def bulk_add_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    
+    # Message se /bulkadd command ko hatana
+    text = update.message.text.replace('/bulkadd', '').strip()
+    if not text:
+        await update.message.reply_text("⚠️ <b>Format Khali Hai!</b>\n\nCommand aise chalayein:\n<code>/bulkadd\nWord1 | Meaning1\nWord2 | Meaning2</code>", parse_mode=ParseMode.HTML)
+        return
+
+    lines = text.split('\n')
+    added_count = 0
+    
+    for line in lines:
+        line = line.strip()
+        if not line or "|" not in line:
+            continue
+        try:
+            parts = line.split("|")
+            word = parts[0].strip()
+            meaning = parts[1].strip()
+            explanation = parts[2].strip() if len(parts) > 2 else "Koi detail nahi hai."
+
+            if word and meaning:
+                next_id = len(WORDS_DATA)
+                WORDS_DATA.append({"id": next_id, "word": word, "meaning": meaning, "explanation": explanation})
+                added_count += 1
+        except Exception:
+            continue
+
+    if added_count > 0:
+        refresh_words_map()
+        await update.message.reply_text(f"🚀 <b>Balle Balle!</b> Ek sath <b>{added_count}</b> naye words successfully jud gaye!\n📚 Total Words: <b>{len(WORDS_DATA)}</b>")
+    else:
+        await update.message.reply_text("❌ Koi valid words nahi mile format me.")
 
 async def send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = update.message or update.callback_query.message
+    if not WORDS_DATA:
+        await target.reply_text("⚠️ Bot me koi words nahi hain.")
+        return
     
     remaining = context.user_data.get("remaining", [])
     if not remaining:
@@ -96,6 +165,9 @@ async def send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE)
         item["meaning"] for item in WORDS_DATA if item["meaning"] != correct_meaning
     ))
     
+    while len(other_meanings) < 3:
+        other_meanings.append(f"Galat Option {len(other_meanings) + 1}")
+        
     wrong_options = random.sample(other_meanings, 3)
     options = wrong_options + [correct_meaning]
     random.shuffle(options)
@@ -123,18 +195,18 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     word_id = int(data_parts[2])
     
     if context.user_data.get("current_question_answered", False):
-        await query.answer("⚠️ Aap is sawal ka jawab pehle hi de chuke hain!", show_alert=False)
+        await query.answer("⚠️ Aap is sawal ka jawab pehle hi de chuke hain!")
         return
     context.user_data["current_question_answered"] = True
     await query.answer()
     
     target_item = WORDS_BY_ID.get(word_id)
     if not target_item:
-        await query.edit_message_text("⚠️ Data nahi mila. Kripya /quiz dobara type karein.")
+        await query.edit_message_text("⚠️ Data nahi mila.")
         return
     correct_word = escape(target_item["word"])
     correct_meaning = escape(target_item["meaning"])
-    explanation = escape(target_item.get("explanation") or "Explanation available nahi hai.")
+    explanation = escape(target_item.get("explanation") or "No details.")
     
     context.user_data["total_attempted"] = context.user_data.get("total_attempted", 0) + 1
     if is_correct == "1":
@@ -156,23 +228,19 @@ async def next_word_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     try:
         await query.message.delete()
-    except Exception as e:
-        logger.error(f"Error deleting old quiz message: {e}")
+    except Exception:
+        pass
     await send_quiz_question(update, context)
 
 def main():
-    if not TOKEN:
-        raise ValueError("BOT_TOKEN missing!")
-        
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("quiz", quiz))
+    application.add_handler(CommandHandler("add", add_word))
+    application.add_handler(CommandHandler("bulkadd", bulk_add_words)) # Bulk add command registered
     application.add_handler(CallbackQueryHandler(next_word_handler, pattern="^next_question$"))
     application.add_handler(CallbackQueryHandler(button_click, pattern=r"^ans|"))
-    
-    logger.info("Bot service running perfectly with 46 built-in words...")
     application.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
-    
