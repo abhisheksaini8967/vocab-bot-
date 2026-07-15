@@ -2,6 +2,7 @@ import os
 import random
 import logging
 from html import escape
+from data import INITIAL_WORDS  # Alag file se data import kiya
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -15,56 +16,8 @@ logger = logging.getLogger(__name__)
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 1786928328
 
-# 📚 Initial Words List (Pehle se loaded hain)
-WORDS_DATA = [
-  {"id": 0, "word": "Philanthropist", "meaning": "परोपकारी", "explanation": "दूसरों की मदद करने वाला"},
-  {"id": 1, "word": "Epitaph", "meaning": "समाधि-लेख", "explanation": "कब्र पर लिखा जाने वाला संदेश"},
-  {"id": 2, "word": "Obsolete", "meaning": "अप्रचलित", "explanation": "जो अब उपयोग में न हो या पुराना हो चुका हो"},
-  {"id": 3, "word": "Illegible", "meaning": "अपठनीय", "explanation": "जिसे पढ़ना मुश्किल या असंभव हो, जैसे डॉक्टर की लिखावट"},
-  {"id": 4, "word": "Inevitable", "meaning": "अनिवार्य / जो होना तय हो", "explanation": "जिसे टाला न जा सके"},
-  {"id": 5, "word": "Aviary", "meaning": "पक्षी-घर", "explanation": "वह जगह जहाँ पक्षियों को रखा जाता है"},
-  {"id": 6, "word": "Contemporary", "meaning": "समकालीन", "explanation": "एक ही समय के लोग या चीजें"},
-  {"id": 7, "word": "Stoic", "meaning": "उदासीन / वैरागी", "explanation": "जो सुख-दुख में एक जैसा रहे और भावनाओं पर नियंत्रण रखे"},
-  {"id": 8, "word": "Atheist", "meaning": "नास्तिक", "explanation": "जो भगवान पर विश्वास नहीं करता"},
-  {"id": 9, "word": "Cartographer", "meaning": "मानचित्रकार", "explanation": "जो नक्शे यानी मैप्स बनाता है"},
-  {"id": 10, "word": "Claustrophobia", "meaning": "बंद या छोटी जगहों से लगने वाला डर", "explanation": "सीमित या बंद स्थानों का अत्यधिक भय"},
-  {"id": 11, "word": "Omniscient", "meaning": "सर्वज्ञानी", "explanation": "जिसे सब कुछ पता हो"},
-  {"id": 12, "word": "Panacea", "meaning": "रामबाण इलाज", "explanation": "हर समस्या या बीमारी का एक ही इलाज"},
-  {"id": 13, "word": "Polyglot", "meaning": "बहुभाषी", "explanation": "जो कई भाषाएं बोल सकता हो"},
-  {"id": 14, "word": "Chronology", "meaning": "कालक्रम", "explanation": "घटनाओं को समय के सही क्रम में व्यवस्थित करना"},
-  {"id": 15, "word": "Extempore", "meaning": "बिना तैयारी का भाषण", "explanation": "बिना किसी पूर्व तैयारी के तुरंत बोलना"},
-  {"id": 16, "word": "Fastidious", "meaning": "तुनकमिज़ाज / जिसे खुश करना मुश्किल हो", "explanation": "जो छोटी-छोटी डिटेल्स पर ध्यान देता है"},
-  {"id": 17, "word": "Utopia", "meaning": "आदर्श लोक", "explanation": "सपनों की एक आदर्श और परफेक्ट दुनिया"},
-  {"id": 18, "word": "Amateur", "meaning": "शौकिया / नौसिखिया", "explanation": "जो किसी काम को प्रोफेशन के लिए नहीं बल्कि शौक के लिए करता है या एक्सपर्ट नहीं है"},
-  {"id": 19, "word": "Ambidextrous", "meaning": "दोनों हाथों से काम करने में कुशल", "explanation": "जो दोनों हाथों का बराबर इस्तेमाल कर सके"},
-  {"id": 20, "word": "Iconoclast", "meaning": "मूर्तिभंजक / स्थापित परंपराओं को तोड़ने वाला", "explanation": "जो पुरानी सोच या ट्रेडिशंस को चुनौती दे"},
-  {"id": 21, "word": "Infallible", "meaning": "अचूक", "explanation": "जिससे कभी कोई गलती न हो"},
-  {"id": 22, "word": "Altruist", "meaning": "परोपकारी / निस्वार्थ", "explanation": "जो अपने से ज्यादा दूसरों की भलाई के बारे में सोचे"},
-  {"id": 23, "word": "Inaudible", "meaning": "जो सुनाई न दे", "explanation": "अश्रव्य"},
-  {"id": 24, "word": "Lexicographer", "meaning": "शब्दकोश बनाने वाला", "explanation": "जो डिक्शनरी लिखता या कंपाइल करता है"},
-  {"id": 25, "word": "Mercenary", "meaning": "किराये का सैनिक / स्वार्थी", "explanation": "जो सिर्फ पैसे के लिए काम करता हो"},
-  {"id": 26, "word": "Misanthrope", "meaning": "मानव-द्वेषी", "explanation": "जो इंसानों या मानव जाति से नफ़रत करता हो"},
-  {"id": 27, "word": "Nostalgia", "meaning": "अतीत की यादें / पुरानी यादों के लिए तड़प", "explanation": "पुरानी सुखद यादों को याद करने की मानसिक स्थिति"},
-  {"id": 28, "word": "Amphibian", "meaning": "उभयचर", "explanation": "जो पानी और जमीन दोनों पर रह सकते हैं, जैसे मेंढक"},
-  {"id": 29, "word": "Autobiography", "meaning": "आत्मकथा", "explanation": "खुद के द्वारा लिखी गई अपने जीवन की कहानी"},
-  {"id": 30, "word": "Cannibal", "meaning": "नरभक्षी", "explanation": "जो इंसान का मांस खाता हो या अपनी ही प्रजाति को खाता हो"},
-  {"id": 31, "word": "Chauffeur", "meaning": "निजी कार चालक", "explanation": "किसी अमीर व्यक्ति या लग्जरी कार का परमानेंट ड्राइवर"},
-  {"id": 32, "word": "Entomology", "meaning": "कीटविज्ञान", "explanation": "कीड़े-मकौड़ों का अध्ययन"},
-  {"id": 33, "word": "Insolvent", "meaning": "दिवालिया", "explanation": "जो अपना कर्ज चुकाने में असमर्थ हो"},
-  {"id": 34, "word": "Kleptomania", "meaning": "चोरी करने की बीमारी / आदत", "explanation": "बिना जरूरत के भी चीजें चुराने की तीव्र इच्छा"},
-  {"id": 35, "word": "Oligarchy", "meaning": "कुलीनतंत्र", "explanation": "कुछ शक्तिशाली या खास लोगों का शासन"},
-  {"id": 36, "word": "Omnipotent", "meaning": "सर्वशक्तिमान", "explanation": "जिसके पास सारी शक्तियां हों"},
-  {"id": 37, "word": "Philatelist", "meaning": "डाक टिकट बटोरने वाला", "explanation": "जिसे स्टैम्प्स कलेक्ट करने का शौक हो"},
-  {"id": 38, "word": "Teetotaler", "meaning": "मद्यत्यागी", "explanation": "जो कभी भी अल्कोहल या शराब नहीं पीता"},
-  {"id": 39, "word": "Versatile", "meaning": "बहुमुखी प्रतिभा का धनी", "explanation": "मल्टीटैलेंटेड इंसान जिसके पास कई तरह के हुनर हों"},
-  {"id": 40, "word": "Anarchist", "meaning": "अराजकतावादी", "explanation": "जो किसी भी सरकार या नियम-कानून को नहीं मानता"},
-  {"id": 41, "word": "Calligraphy", "meaning": "सुलेखन", "explanation": "सुंदर लिखावट या ब्यूटीफुल हैंडराइटिंग की कला"},
-  {"id": 42, "word": "Constellation", "meaning": "नक्षत्र / तारागण", "explanation": "तारों का समूह जो एक निश्चित आकृति बनाता है"},
-  {"id": 43, "word": "Gregarious", "meaning": "झुंड में रहने वाला / सामाजिक", "explanation": "जो समूह या गैंग में रहना पसंद करते हैं"},
-  {"id": 44, "word": "Introvert", "meaning": "अंतर्मुखी", "explanation": "जो अकेले रहना पसंद करता है और ज्यादा सामाजिक नहीं होता"},
-  {"id": 45, "word": "Orchard", "meaning": "फलों का बाग", "explanation": "जहाँ फलों के पेड़ उगाए जाते हैं"}
-]
-
+# Memory Database initialized with imported list
+WORDS_DATA = list(INITIAL_WORDS)
 WORDS_BY_ID = {item["id"]: item for item in WORDS_DATA}
 
 def refresh_words_map():
@@ -79,25 +32,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     welcome_text = "👋 <b>Swagat hai!</b>\n\nVocabulary quiz shuru karne ke liye <b>/quiz</b> type karein."
     if update.effective_user.id == ADMIN_ID:
-        welcome_text += "\n\n👑 <b>Admin Control Active:</b>\n- Ek word jodne ke liye: <code>/add Word | Meaning</code>\n- Ek sath bohot saare words jodne ke liye <code>/bulkadd</code> likhein fir agli line se list paste karein."
+        welcome_text += "\n\n👑 <b>Admin Control Active:</b>\n- Ek word jodne ke liye: <code>/add Word | Meaning | Explanation</code>\n- Bulk me jodne ke liye <code>/bulkadd</code> likh kar agli line se poori list paste karein."
         
     await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
 
-# 👑 1. Single word add karne ki command
+# 👑 1. Single word add handler
 async def add_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     text = " ".join(context.args)
-    if not text or "|" not in text:
+    if not text or text.count("|") < 2:
         await update.message.reply_text("⚠️ Format: <code>/add Word | Meaning | Explanation</code>", parse_mode=ParseMode.HTML)
         return
     try:
         parts = text.split("|")
         word = parts[0].strip()
         meaning = parts[1].strip()
-        explanation = parts[2].strip() if len(parts) > 2 else "Koi detail nahi hai."
+        explanation = parts[2].strip()
         
-        if word and meaning:
+        if word and meaning and explanation:
             next_id = len(WORDS_DATA)
             WORDS_DATA.append({"id": next_id, "word": word, "meaning": meaning, "explanation": explanation})
             refresh_words_map()
@@ -105,15 +58,14 @@ async def add_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text("❌ Error adding word.")
 
-# 👑 2. Ek sath unlimited words jodne ki command (Bulk Add)
+# 👑 2. Upgraded Bulk Add (Explanation fixed and handled properly)
 async def bulk_add_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     
-    # Message se /bulkadd command ko hatana
     text = update.message.text.replace('/bulkadd', '').strip()
     if not text:
-        await update.message.reply_text("⚠️ <b>Format Khali Hai!</b>\n\nCommand aise chalayein:\n<code>/bulkadd\nWord1 | Meaning1\nWord2 | Meaning2</code>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text("⚠️ <b>Format Khali Hai!</b>\n\nCommand format:\n<code>/bulkadd\nWord1 | Meaning1 | Explanation1\nWord2 | Meaning2 | Explanation2</code>", parse_mode=ParseMode.HTML)
         return
 
     lines = text.split('\n')
@@ -121,15 +73,16 @@ async def bulk_add_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     for line in lines:
         line = line.strip()
-        if not line or "|" not in line:
+        # Ensure dono separators (|) maujood hon taaki explanation mandatory rahe
+        if not line or line.count("|") < 2:
             continue
         try:
             parts = line.split("|")
             word = parts[0].strip()
             meaning = parts[1].strip()
-            explanation = parts[2].strip() if len(parts) > 2 else "Koi detail nahi hai."
+            explanation = parts[2].strip()
 
-            if word and meaning:
+            if word and meaning and explanation:
                 next_id = len(WORDS_DATA)
                 WORDS_DATA.append({"id": next_id, "word": word, "meaning": meaning, "explanation": explanation})
                 added_count += 1
@@ -138,9 +91,9 @@ async def bulk_add_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if added_count > 0:
         refresh_words_map()
-        await update.message.reply_text(f"🚀 <b>Balle Balle!</b> Ek sath <b>{added_count}</b> naye words successfully jud gaye!\n📚 Total Words: <b>{len(WORDS_DATA)}</b>")
+        await update.message.reply_text(f"🚀 <b>Success!</b> Ek sath <b>{added_count}</b> words jod diye gaye hain (Explanation ke sath)!\n📚 Total Loaded Words: <b>{len(WORDS_DATA)}</b>")
     else:
-        await update.message.reply_text("❌ Koi valid words nahi mile format me.")
+        await update.message.reply_text("❌ Mujhe koi bhi valid line nahi mili. Kripya dhyan dein ki har line me double '|' hona chahiye.")
 
 async def send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = update.message or update.callback_query.message
@@ -237,10 +190,11 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("quiz", quiz))
     application.add_handler(CommandHandler("add", add_word))
-    application.add_handler(CommandHandler("bulkadd", bulk_add_words)) # Bulk add command registered
+    application.add_handler(CommandHandler("bulkadd", bulk_add_words))
     application.add_handler(CallbackQueryHandler(next_word_handler, pattern="^next_question$"))
     application.add_handler(CallbackQueryHandler(button_click, pattern=r"^ans|"))
     application.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
+    
